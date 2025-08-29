@@ -1,0 +1,5 @@
+_target_: data.associateRecall.AssociateRecall
+
+length: 5
+n_train: 8192
+n_test: 1024

@@ -1,0 +1,15 @@
+_target_: model.stateSpaceModel.StateSpaceModel
+
+init:
+    vocab_size: 28
+    dim: 16
+    div: 16
+    N: 64
+    layer: 4
+    dropout: 0.
+    
+forward:
+    cnn: True
+    is_emb: True
+    is_ssm: True
+    is_ffn: True
