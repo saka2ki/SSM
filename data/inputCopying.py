@@ -24,4 +24,4 @@ def InputCopying(length=5, n_train=1024, n_test=128):
     train_dataset = InputCopyingDataset(length=length, n_samples=n_train)
     test_dataset = InputCopyingDataset(length=length, n_samples=n_test)
 
-    return train_dataset, test_dataset
+    return train_dataset, test_dataset, 28

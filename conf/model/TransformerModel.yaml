@@ -3,5 +3,5 @@ _target_: model.transformerModel.TransformerModel
 init:
     vocab_size: 28
     dim: 16
-    num_layers: 4
+    layer: 4
 forward: {}

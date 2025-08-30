@@ -1,7 +1,7 @@
 _target_: model.stateSpaceModel.StateSpaceModel
 
 init:
-    vocab_size: 28
+    vocab_size: null
     dim: 16
     div: 16
     N: 64

@@ -17,4 +17,4 @@ def MNIST():
     train_dataset = datasets.MNIST(root='.', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST(root='.', train=False, download=True, transform=transform)
     
-    return train_dataset, test_dataset
+    return train_dataset, test_dataset, 256

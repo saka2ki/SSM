@@ -15,8 +15,8 @@ def main(cfg: DictConfig) -> None:
         #name=cfg.name,
         config=dict(cfg)
     )
+    train_dataset, test_dataset, cfg.model.init.vocab_size = hydra.utils.instantiate(cfg.data)
     model = hydra.utils.instantiate({"_target_": cfg.model._target_, **cfg.model.init}).to(cfg.device)
-    train_dataset, test_dataset = hydra.utils.instantiate(cfg.data)
     device = cfg.device
     
     train_loader = DataLoader(train_dataset, batch_size=cfg.bsz, shuffle=True)
