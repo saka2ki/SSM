@@ -8,7 +8,7 @@ class TransformerModel(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=dim, nhead=1)
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=layer)
         self.head = nn.Linear(dim, vocab_size)
-    def forward(self, x, mask=None):
+    def forward(self, x):
         x = x.transpose(0, 1)
         L, B = x.shape
         mask = torch.triu(torch.full((L, L), float('-inf')), diagonal=1)

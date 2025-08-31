@@ -11,10 +11,11 @@ from tqdm.auto import tqdm
 @hydra.main(config_name="config", version_base=None, config_path="conf")
 def main(cfg: DictConfig) -> None:
     wandb.init(
-        project="myproject",
-        #name=cfg.name,
+        project=cfg.data._target_,
+        group=cfg.model._target_  + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
         config=dict(cfg)
     )
+
     train_dataset, test_dataset, cfg.model.init.vocab_size = hydra.utils.instantiate(cfg.data)
     model = hydra.utils.instantiate({"_target_": cfg.model._target_, **cfg.model.init}).to(cfg.device)
     device = cfg.device
@@ -48,7 +49,6 @@ def main(cfg: DictConfig) -> None:
             # パラメータの更新
             optimizer.step()
             #break
-            #wandb.log({"train_loss": train_loss})
             
         print(f"Train: Epoch [{epoch+1}/{cfg.epochs}], Loss: {torch.tensor(train_losses).mean():.4f}")
         model.eval()
@@ -62,15 +62,14 @@ def main(cfg: DictConfig) -> None:
               test_loss = criterion(output.transpose(-2,-1), test[:, 1:])
               test_losses.append(test_loss.item())
               #break
-              #wandb.log({"test_loss": test_loss})
               
         #if epoch % 10 == 9:
         print(f"Test: Epoch [{epoch+1}/{cfg.epochs}], Loss: {torch.tensor(test_losses).mean():.4f}")
-
         wandb.log({
-            "train_loss": torch.tensor(train_losses).mean(), 
-            "test_loss": torch.tensor(test_losses).mean()
-        })    
+            "train_loss": torch.tensor(train_losses).mean(),
+            "test_loss": torch.tensor(test_losses).mean(),
+        })
+  
         torch.save(model.state_dict(), f'./module/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
         wandb.save(f'./module/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
     
