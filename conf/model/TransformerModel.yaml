@@ -1,7 +1,9 @@
 _target_: model.transformerModel.TransformerModel
 
 init:
-    vocab_size: 28
+    vocab_size: null
     dim: 16
+    nhead: 4
     layer: 4
+    dropout: 0.
 forward: {}
