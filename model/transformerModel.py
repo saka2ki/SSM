@@ -9,10 +9,10 @@ class TransformerModel(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=layer)
         self.head = nn.Linear(dim, vocab_size)
     def forward(self, x):
-        x = x.transpose(0, 1)
-        L, B = x.shape
+        B, L = x.shape
         mask = torch.triu(torch.full((L, L), float('-inf')), diagonal=1)
-        x = self.embedding(x)  # (seq_len, batch_size, dim)
+        x = self.embedding(x) # (batch_size, seq_len, dim)
+        x = x.transpose(0, 1) # (seq_len, batch_size, dim)
         x = self.encoder(x, mask=mask)  # マスクを適用
         out = self.head(x)  # (seq_len, batch_size, vocab_size)
         return out.transpose(0, 1)
