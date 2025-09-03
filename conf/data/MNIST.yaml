@@ -1,1 +1,5 @@
 _target_: data.mnist.MNIST
+
+length: null
+n_train: null
+n_test: null

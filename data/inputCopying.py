@@ -14,7 +14,7 @@ class InputCopyingDataset(Dataset):
         return self.n_samples
 
     def __getitem__(self, idx):
-        sample = random.sample(self.keys[2:], self.length)
+        sample = random.choices(self.keys[2:], k=self.length)
         tokens = self.tokenizer.encode(
             ["<BOS>"] + sample + ["<COPY>"] + sample
         )

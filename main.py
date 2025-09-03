@@ -11,14 +11,15 @@ from tqdm.auto import tqdm
 @hydra.main(config_name="config", version_base=None, config_path="conf")
 def main(cfg: DictConfig) -> None:
     wandb.init(
-        project=cfg.data._target_,
-        group=cfg.model._target_  + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
+        project="myproject",
+        group=cfg.data._target_.split('.')[-1] + "_" + str(cfg.data.length) + "length",
+        name=cfg.model._target_.split('.')[-1]  + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
         config=dict(cfg)
     )
 
-    train_dataset, test_dataset, cfg.model.init.vocab_size = hydra.utils.instantiate(cfg.data)
-    model = hydra.utils.instantiate({"_target_": cfg.model._target_, **cfg.model.init}).to(cfg.device)
     device = cfg.device
+    train_dataset, test_dataset, cfg.model.init.vocab_size = hydra.utils.instantiate(cfg.data)
+    model = hydra.utils.instantiate({"_target_": cfg.model._target_, **cfg.model.init}).to(device)
     
     train_loader = DataLoader(train_dataset, batch_size=cfg.bsz, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=cfg.bsz, shuffle=False)
@@ -70,10 +71,11 @@ def main(cfg: DictConfig) -> None:
             "test_loss": torch.tensor(test_losses).mean(),
         })
   
-        torch.save(model.state_dict(), f'./module/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
-        wandb.save(f'./module/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
-    
+        torch.save(model.state_dict(), f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+        #wandb.save(f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+
+    wandb.finish()
     print("--- 学習終了 ---")
 
 if __name__ == "__main__":
-    main()
+    for _ in range(10): main()

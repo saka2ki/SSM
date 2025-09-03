@@ -17,7 +17,7 @@ class AssociateRecallDataset(Dataset):
         return self.n_samples
 
     def __getitem__(self, idx):
-        sample = random.sample(self.keys, self.length)
+        sample = random.choices(self.keys, k=self.length)
         tokens = self.tokenizer.encode(
             [item for key in sample for item in (key, self.dicts[key])]
         )
