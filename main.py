@@ -2,6 +2,7 @@ import hydra
 from omegaconf import DictConfig
 import wandb
 
+import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -70,9 +71,11 @@ def main(cfg: DictConfig) -> None:
             "train_loss": torch.tensor(train_losses).mean(),
             "test_loss": torch.tensor(test_losses).mean(),
         })
-  
-        torch.save(model.state_dict(), f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
-        #wandb.save(f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+
+        save_dir = f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}'
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+        #wandb.save(f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
 
     wandb.finish()
     print("--- 学習終了 ---")
