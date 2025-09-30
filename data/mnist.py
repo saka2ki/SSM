@@ -13,7 +13,7 @@ transform = transforms.Compose([
     totensor()
 ])
 
-def MNIST(length=null, n_train=null, n_test=null):
+def MNIST(length=None, n_train=None, n_test=None):
     # MNISTデータセットのダウンロード
     train_dataset = datasets.MNIST(root='/data', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST(root='/data', train=False, download=True, transform=transform)
