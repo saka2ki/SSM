@@ -14,7 +14,7 @@ def main(cfg: DictConfig) -> None:
     wandb.init(
         project="myproject",
         group=cfg.data._target_.split('.')[-1] + "_" + str(cfg.data.length) + "length",
-        name=cfg.model._target_.split('.')[-1]  + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
+        name=cfg.model._target_.split('.')[-1] + "-" + cfg.model.init.init + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
         config=dict(cfg)
     )
 

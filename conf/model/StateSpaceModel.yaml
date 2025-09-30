@@ -7,6 +7,7 @@ init:
     N: 64
     layer: 4
     dropout: 0.
+    init: 'hippo'
     
 forward:
     cnn: True

@@ -41,13 +41,14 @@ def discrete_DPLR(Lambda, P, B, C, step, L):
 def scan_SSM(Ab, Bb, Cb, u, x):
     assert Ab.shape[0] == Ab.shape[-1]
     x_k, y = x, []
-    for idx in range(u.shape[1]):
-      #print(f'x_k = Ab:{Ab.shape} @ x:{x[idx].shape} + Bb:{Bb.shape} @ u:{u[:,idx,:].unsqueeze(-1).shape}')
-      x_k = Ab @ x_k.to(Ab.device) +  Bb @ u[:, idx, :].unsqueeze(-1).to(Bb.dtype)
+    for idx in range(u.shape[-2]):
+      #print(f'x_k = Ab:{Ab.shape} @ x:{x_k.shape} + Bb:{Bb.shape} @ u:{u[...,idx,:].unsqueeze(-1).shape}')
+      x_k = Ab @ x_k.to(Ab.device) +  Bb @ u[..., idx, :].unsqueeze(-1).to(Bb.dtype)
       #print(f'y_k = Cb:{Cb.shape} @ x_k:{x_k.shape}')
       y_k = (Cb @ x_k).squeeze(-1)
       y.append(y_k)
       #print(f'y_k{y_k.shape}')
+      #print(x_k[...,0])
     return torch.stack(y).real.transpose(0, 1), x_k
 
 def make_HiPPO(N):
@@ -127,47 +128,60 @@ def conv(u, K):
     u = u.unsqueeze(-1)
     K = K.unsqueeze(0)
     #print(u.shape, K.shape)
-    assert K.shape[1] == u.shape[1]
-    ud = torch.fft.rfft(F.pad(u, (*(0, 0), *(0, 0), *(0, K.shape[1]))), dim=1)
-    Kd = torch.fft.rfft(F.pad(K, (*(0, 0), *(0, 0), *(0, u.shape[1]))), dim=1)
+    assert K.shape[-3] == u.shape[-3]
+    ud = torch.fft.rfft(F.pad(u, (*(0, 0), *(0, 0), *(0, K.shape[-3]))), dim=-3)
+    Kd = torch.fft.rfft(F.pad(K, (*(0, 0), *(0, 0), *(0, u.shape[-3]))), dim=-3)
     #print(ud.shape, Kd.shape)
     #print((Kd @ ud).shape)
-    return torch.fft.irfft(Kd @ ud, dim=1)[:, :K.shape[1], ...].squeeze(-1)
+    return torch.fft.irfft(Kd @ ud, dim=1)[:, :K.shape[-3], ...].squeeze(-1)
 
 class SSM(nn.Module):
-  def __init__(self, dim, N, div=1):
+  def __init__(self, dim, N, div=1, init='hippo'):
     super().__init__()
     assert dim % div == 0
       
     init_Lambda, init_P, init_B, _ = hippo_initializer(N)
     init_P = init_P.unsqueeze(-1).repeat(1,1)
     init_B = init_B.unsqueeze(-1).repeat(1,dim)
-    #init_C = torch.randn(2, dim, N) * (0.5**0.5)
-
+    if init == 'randn':
+        init_Lambda, init_P, init_B = torch.randn_like(init_Lambda), torch.randn_like(init_P), torch.randn_like(init_B)
+    elif init == 'diag':
+        init_P = torch.zeros_like(init_P)
+      
     #vmap
     init_Lambda = init_Lambda.unsqueeze(-1).repeat(1, div)
     init_P = init_P.unsqueeze(-1).repeat(1,1, div)
     init_B = init_B.view(init_B.shape[0], init_B.shape[1]//div, div)
     init_C = torch.randn(2, dim//div, N, div) * (0.5**0.5)
+    
+    requires_grad = False if init=='static' else True
+    self.Lambda_re, self.Lambda_im = nn.Parameter(init_Lambda.real, requires_grad=requires_grad), nn.Parameter(init_Lambda.imag, requires_grad=requires_grad)
+    self.P_re, self.P_im = nn.Parameter(init_P.real, requires_grad=requires_grad), nn.Parameter(init_P.imag, requires_grad=requires_grad)
+    self.B_re, self.B_im = nn.Parameter(init_B.real, requires_grad=requires_grad), nn.Parameter(init_B.imag, requires_grad=requires_grad)
 
-    self.Lambda_re, self.Lambda_im = nn.Parameter(init_Lambda.real), nn.Parameter(init_Lambda.imag)
-    self.P_re, self.P_im = nn.Parameter(init_P.real), nn.Parameter(init_P.imag)
-    self.B_re, self.B_im = nn.Parameter(init_B.real), nn.Parameter(init_B.imag)
+    if init == 'diag':
+        self.P_re.requires_grad_(False)
+        self.P_im.requires_grad_(False)
+
     self.C_re, self.C_im = nn.Parameter(init_C[0]), nn.Parameter(init_C[1])
     #self.D = nn.Parameter(torch.ones(dim, dim))
     self.step = nn.Parameter(log_step_initializer(shape=(1,)))
+    
     self.div = div
 
     self.x = torch.zeros(1, N, 1, div, dtype=torch.cfloat)
-  def forward(self, u, cnn=True):
+
+  def forward(self, u, cnn=True, L=0):
     with torch.no_grad():
       self.Lambda_re.clamp_(min=None, max=-1e-4)
     Lambda = (self.Lambda_re + 1j * self.Lambda_im)
     P = (self.P_re + 1j * self.P_im)
     B = (self.B_re + 1j * self.B_im)
     C = (self.C_re + 1j * self.C_im)
-    b, L, d = u.shape
-    u = u.view(b, L, d//self.div, self.div)
+    
+    shape = u.shape
+    if L<1: L = shape[-2]
+    u = u.view(*shape[:-1], shape[-1]//self.div, self.div)
     step = torch.exp(self.step)
 
     #print(f'Lambda:{Lambda.shape}, P:{P.shape}, B:{B.shape}, C:{C.shape}, step:{step.shape}')
@@ -175,9 +189,11 @@ class SSM(nn.Module):
       K = torch.vmap(kernel_DPLR, in_dims=(-1, -1, -1, -1, None, None), out_dims=-1)(Lambda, P, B, C, step, L)
       #print(u.shape, K.shape)
       #return conv(u, K)# + x @ self.D
-      return torch.vmap(conv, in_dims=(-1, -1), out_dims=-1)(u, K).view(b, L, d)
+      return torch.vmap(conv, in_dims=(-1, -1), out_dims=-1)(u, K).view(shape)
     else:
       Ab, Bb, Cb = torch.vmap(discrete_DPLR, in_dims=(-1, -1, -1, -1, None, None), out_dims=-1)(Lambda, P, B, C, step, L)
       y, self.x = torch.vmap(scan_SSM, in_dims=(-1, -1, -1, -1, -1), out_dims=-1)(Ab, Bb, Cb, u, self.x)
-      #print(self.x[0, :1, 0])
-      return y.view(b, L, d)
+      #print(Ab[0][0], Bb[0][0], Cb[0][0])
+      return y.view(shape)
+
+  def reset_x(self): self.x = torch.zeros_like(self.x)
