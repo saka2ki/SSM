@@ -11,13 +11,14 @@ from tqdm.auto import tqdm
 
 @hydra.main(config_name="config", version_base=None, config_path="conf")
 def main(cfg: DictConfig) -> None:
+    """
     wandb.init(
         project="myproject",
         group=cfg.data._target_.split('.')[-1] + "_" + str(cfg.data.length) + "length",
         name=cfg.model._target_.split('.')[-1] + "-" + cfg.model.init.init + "_" + str(cfg.model.init.dim) + "dim_" + str(cfg.model.init.layer) + "layer",
         config=dict(cfg)
     )
-
+    #"""
     device = cfg.device
     train_dataset, test_dataset, cfg.model.init.vocab_size = hydra.utils.instantiate(cfg.data)
     model = hydra.utils.instantiate({"_target_": cfg.model._target_, **cfg.model.init}).to(device)
@@ -26,7 +27,7 @@ def main(cfg: DictConfig) -> None:
     test_loader = DataLoader(test_dataset, batch_size=cfg.bsz, shuffle=False)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.lr)
 
     # 4. 学習サイクル
     print("--- 学習開始 ---")
@@ -67,18 +68,20 @@ def main(cfg: DictConfig) -> None:
               
         #if epoch % 10 == 9:
         print(f"Test: Epoch [{epoch+1}/{cfg.epochs}], Loss: {torch.tensor(test_losses).mean():.4f}")
+        """
         wandb.log({
             "train_loss": torch.tensor(train_losses).mean(),
             "test_loss": torch.tensor(test_losses).mean(),
         })
-
+        #"""
         save_dir = f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}'
         os.makedirs(save_dir, exist_ok=True)
-        torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+        #torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+        torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}_{epoch}.pth')
         #wandb.save(f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
 
     wandb.finish()
     print("--- 学習終了 ---")
 
 if __name__ == "__main__":
-    for _ in range(10): main()
+    for _ in range(1): main()
