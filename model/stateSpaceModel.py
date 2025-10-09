@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from .ssm import SSM
+#from .ssm import SSM
+from .s4 import SSM
 
 class StateSpaceModel(nn.Module):
   def __init__(self, vocab_size, dim, N, div, layer=1, dropout=0., init='hippo'):
@@ -9,7 +10,7 @@ class StateSpaceModel(nn.Module):
     self.layers = nn.ModuleList([
         nn.ModuleDict({
           'ssm':
-            SSM(dim, N, div, init),
+            SSM(dim, N),
           'ffn':
             nn.Sequential(
                 nn.Linear(dim, 4*dim),
