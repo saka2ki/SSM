@@ -19,7 +19,16 @@ class StateSpaceModel(nn.Module):
             ),
           'ln': nn.LayerNorm(dim),
     }) for _ in range(layer)])
-    self.logits = nn.Linear(dim, vocab_size)
+    self.logits = nn.Linear(dim, vocab_size, bias=False)
+
+    self.apply(self._init_weights)
+
+def _init_weights(self, module):
+    if isinstance(module, (nn.Linear, nn.Embedding)):
+        nn.init.normal_(module.weight, mean=0, std=0.02)
+    if isinstance(module, nn.LayerNorm) and module.bias is not None:
+        nn.init.zeros_(module.bias)
+        
   def forward(self, x, cnn=True, is_emb=True, is_ssm=True, is_ffn=True):
     x = self.emb(x) if is_emb else x.unsqueeze(-1)
     for layer in self.layers:
