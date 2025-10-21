@@ -24,7 +24,7 @@ class StateSpaceModel(nn.Module):
 
     self.apply(self._init_weights)
 
-def _init_weights(self, module):
+  def _init_weights(self, module):
     if isinstance(module, (nn.Linear, nn.Embedding)):
         nn.init.normal_(module.weight, mean=0, std=0.02)
     if isinstance(module, nn.LayerNorm) and module.bias is not None:

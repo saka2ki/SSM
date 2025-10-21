@@ -37,27 +37,21 @@ def hippo_initializer(dim, N):
     return Lambda.repeat(dim, 1), P.repeat(dim, 1), B.repeat(dim, 1)
     
 def discrete_DPLR(Lambda, P, B, C, step, L):
-    # Convert parameters to matrices
     B = B.unsqueeze(-1)
     C = C.unsqueeze(-2)
     P = P.unsqueeze(-1) # dim, N, 1
     Q = P.conj().transpose(-2, -1) # dim, 1, N
     N = Lambda.shape[-1]
-    A = torch.diag_embed(Lambda) - P @ Q
+    A = torch.diag_embed(Lambda)
     I = torch.eye(N).to(Lambda.device)
 
-    # Forward Euler
     A0 = (2.0 / step) * I + A
 
-    # Backward Euler
-    D = torch.diag_embed(1.0 / ((2.0 / step) - Lambda)) # dim, N, N
-    A1 = D - (D @ P * (1.0 / (1 + (Q @ D @ P))) * Q @ D)
+    A1 = torch.diag_embed(1.0 / ((2.0 / step) - Lambda)) # dim, N, N
 
-    # A bar and B bar
     Ab = A1 @ A0
     Bb = 2 * A1 @ B
 
-    # Recover Cbar from Ct
     Cb = C @ inv(I - matrix_power(Ab, L)).conj()
     return Ab, Bb, Cb.conj()
     
@@ -68,10 +62,13 @@ def scan_SSM(Ab, Bb, Cb, u, x0):
     Cb = Cb.unsqueeze(0)       # 1,            dim, 1, N
     u = u.view(*u.shape, 1, 1) # batch, (seq), dim, 1, 1
     for u_k in u.unbind(dim=-4):
-        x_k = Ab @ x_k + Bb @ u_k.to(Bb.dtype)
+        x_k = Ab @ x_k.to(Ab.device) + Bb @ u_k.to(Bb.dtype)
         y_k = Cb @ x_k
         y.append(y_k.real.squeeze())
     return torch.stack(y).transpose(0,1), x_k
+
+def cauchy(v, omega, lambd):
+    return (v / (omega - lambd)).sum(dim=-1)
 
 def cauchy(v, omega, lambd):
     return (v / (omega - lambd)).sum(dim=-1)
@@ -82,14 +79,7 @@ def kernel_DPLR(Lambda, P, B, C, step, L):
     g = (2.0 / step) * ((1.0 - Omega_L) / (1.0 + Omega_L)).view(L, 1, 1)
     c = 2.0 / (1.0 + Omega_L).view(L, 1)
 
-    aterm = (C.conj(), P.conj())
-    bterm = (B, P)
-
-    k00 = cauchy(aterm[0] * bterm[0], g, Lambda)
-    k01 = cauchy(aterm[0] * bterm[1], g, Lambda)
-    k10 = cauchy(aterm[1] * bterm[0], g, Lambda)
-    k11 = cauchy(aterm[1] * bterm[1], g, Lambda)
-    atRoots = c * (k00 - k01 * (1.0 / (1.0 + k11)) * k10) # seq, dim
+    atRoots = c * cauchy(C.conj() * B, g, Lambda) # seq, dim
     out = torch.fft.ifft(atRoots, L, dim=-2)
     return out.real
 
