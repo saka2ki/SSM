@@ -74,14 +74,14 @@ def main(cfg: DictConfig) -> None:
             "test_loss": torch.tensor(test_losses).mean(),
         })
         #"""
-        save_dir = f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}'
+        save_dir = f'./module/{cfg.data._target_.split('.')[-1]}/{cfg.data.length}len/{model.__class__.__name__}/{cfg.model.init.dim}dim'
         os.makedirs(save_dir, exist_ok=True)
-        #torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
-        torch.save(model.state_dict(), f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}_{epoch}.pth')
+        torch.save(model.state_dict(), f'{save_dir}/{epoch}epoch.pth')
         #wandb.save(f'{save_dir}/{model.__class__.__name__}_{cfg.model.init.dim}.pth')
+        
 
     wandb.finish()
     print("--- 学習終了 ---")
-
+        
 if __name__ == "__main__":
     for _ in range(1): main()
