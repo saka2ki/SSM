@@ -70,7 +70,7 @@ def scan_SSM(Ab, Bb, Cb, u, x0):
     for u_k in u.unbind(dim=-4):
         x_k = Ab @ x_k + Bb @ u_k.to(Bb.dtype)
         y_k = Cb @ x_k
-        y.append(y_k.real.squeeze())
+        y.append(y_k.real.squeeze((-2, -1)))
     return torch.stack(y).transpose(0,1), x_k
 
 def cauchy(v, omega, lambd):

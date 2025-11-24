@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-#from .ssm import SSM
 from .s4 import SSM
 
 class StateSpaceModel(nn.Module):
-  def __init__(self, vocab_size, dim, N, div, layer=1, dropout=0., init='hippo'):
+  def __init__(self, vocab_size, dim, N, layer=1, dropout=0.):
     super().__init__()
     self.emb = nn.Embedding(vocab_size, dim)
     self.layers = nn.ModuleList([
@@ -13,14 +12,14 @@ class StateSpaceModel(nn.Module):
             SSM(dim, N),
           'ffn':
             nn.Sequential(
-                nn.Linear(dim, 4*dim),
+                nn.Linear(dim, dim),
                 nn.GELU(),
-                nn.Linear(4*dim, dim),
+                nn.Linear(dim, dim),
                 nn.Dropout(dropout)
             ),
           'ln': nn.LayerNorm(dim),
     }) for _ in range(layer)])
-    self.logits = nn.Linear(dim, vocab_size, bias=False)
+    self.logits = nn.Linear(dim, vocab_size, bias=True)
 
     self.apply(self._init_weights)
 
@@ -30,12 +29,10 @@ class StateSpaceModel(nn.Module):
     if isinstance(module, nn.LayerNorm) and module.bias is not None:
         nn.init.zeros_(module.bias)
         
-  def forward(self, x, cnn=True, is_emb=True, is_ssm=True, is_ffn=True):
-    x = self.emb(x) if is_emb else x.unsqueeze(-1)
+  def forward(self, x, cnn=True, L=0):
+    x = self.emb(x)
     for layer in self.layers:
-      if is_ssm:
-        x = layer['ssm'](x, cnn)# + x
-      if is_ffn:
-        x = layer['ffn'](x) + x
+      x = layer['ssm'](x, cnn, L=L) + x
+      x = layer['ffn'](x) + x
       x = layer['ln'](x)
     return self.logits(x)
