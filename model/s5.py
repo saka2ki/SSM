@@ -7,34 +7,6 @@ torch.set_printoptions(precision=3, sci_mode=False)
 
 def log_step_initializer(dt_min=0.001, dt_max=0.1, shape=(1,)):
     return torch.empty(shape).uniform_(math.log(dt_min), math.log(dt_max))
-
-def make_HiPPO(N):
-    P = torch.sqrt(1 + 2 * torch.arange(N))
-    A = P[:, None] * P[None, :]
-    A = torch.tril(A) - torch.diag(torch.arange(N))
-    return -A
-
-def make_NPLR_HiPPO(N):
-    nhippo = make_HiPPO(N)
-    P = torch.sqrt(torch.arange(N) + 0.5)
-    B = torch.sqrt(2 * torch.arange(N) + 1.0)
-    return nhippo, P, B
-
-def make_DPLR_HiPPO(N):
-    """Diagonalize NPLR representation"""
-    A, P, B = make_NPLR_HiPPO(N)
-    S = A + P[:, None] * P[None, :]
-    S_diag = torch.diagonal(S)
-    A_real = torch.mean(S_diag) * torch.ones_like(S_diag)
-    A_imag, V = eigh(S * -1j)
-
-    P = V.conj().T @ P.to(V.dtype)
-    B = V.conj().T @ B.to(V.dtype)
-    return A_real + 1j * A_imag, P, B, V
-
-def hippo_initializer(dim, N):
-    Lambda, P, B, _ = make_DPLR_HiPPO(N)
-    return Lambda.repeat(dim, 1), P.repeat(dim, 1), B.repeat(dim, 1)
     
 def discrete_DPLR(Lambda, B, C, step, L):
     B = B.unsqueeze(-1)
@@ -49,19 +21,18 @@ def discrete_DPLR(Lambda, B, C, step, L):
 
     Ab = A1 @ A0
     Bb = 2 * A1 @ B
-
+    
     Cb = C @ inv(I - matrix_power(Ab, L)).conj()
     return Ab, Bb, Cb.conj()
     
 def scan_SSM(Ab, Bb, Cb, u, x0):
     # u.Size(..., seq, dim)
+    _, L, _ = u.shape
     x_k, y = x0, []
-    Bb = Bb.unsqueeze(0)       # 1,            dim, N, 1
-    Cb = Cb.unsqueeze(0)       # 1,            dim, 1, N
     u = u.view(*u.shape, 1, 1) # batch, (seq), dim, 1, 1
-    for u_k in u.unbind(dim=-4):
-        x_k = Ab @ x_k.to(Ab.device) + Bb @ u_k.to(Bb.dtype)
-        y_k = Cb @ x_k
+    for k in range(L):
+        x_k = Ab[:, k, :, :] @ x_k.to(Ab.device) + Bb[:, k, :, :] @ u[:, k, :, :].to(Bb.dtype)
+        y_k = Cb[:, k, :, :] @ x_k
         y.append(y_k.real.squeeze((-2, -1)))
     return torch.stack(y).transpose(0,1), x_k
 
@@ -86,10 +57,9 @@ def conv(u, K):
 class SSM(nn.Module):
     def __init__(self, dim, N):
         super().__init__()
-        init_Lambda, init_P, init_B = hippo_initializer(dim, N)
+        init_B = torch.randn(dim, N, dtype=torch.cfloat)
         init_C = torch.randn(dim, N, dtype=torch.cfloat)
 
-        self.Lambda_re, self.Lambda_im = nn.Parameter(init_Lambda.real), nn.Parameter(init_Lambda.imag)
         self.B_re, self.B_im = nn.Parameter(init_B.real), nn.Parameter(init_B.imag)
         self.C_re, self.C_im = nn.Parameter(init_C.real), nn.Parameter(init_C.imag)
         self.step = nn.Parameter(log_step_initializer(shape=(1,)))
@@ -97,9 +67,13 @@ class SSM(nn.Module):
         self.register_buffer("x", torch.zeros(dim,N,1, dtype=torch.cfloat))
     def forward(self, u, cnn=True, L=0):
         if L<1: L = u.shape[-2]
-        Lambda = self.Lambda_re + 1j * self.Lambda_im
-        B = self.B_re + 1j * self.B_im
-        C = self.C_re + 1j * self.C_im
+        B_re = torch.sigmoid(torch.einsum('bld,dn->bldn', u, self.B_re))
+        B_im = torch.sigmoid(torch.einsum('bld,dn->bldn', u, self.B_im))
+        C_re = torch.einsum('bld,dn->bldn', u, self.C_re)
+        C_im = torch.einsum('bld,dn->bldn', u, self.C_im)
+        Lambda = (1 - B_re) + 1j * (1 - B_im)
+        B = B_re + 1j * B_im
+        C = C_re + 1j * C_im
         step = torch.exp(self.step)
         if cnn:
             K = kernel_DPLR(Lambda, B, C, step, L)
