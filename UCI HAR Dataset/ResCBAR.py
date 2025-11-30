@@ -5,27 +5,28 @@ from cbam1d import CBAM
 class CN_GR(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        self.conv = nn.Conv1d(in_channels=3, out_channels=dim, kernel_size=3)
-        self.tanh = nn.Tanh()
-        self.maxpool = nn.MaxPool1d(kernel_size=2, stride=1)
+        self.conv = nn.Sequential(
+            nn.Conv1d(in_channels=3, out_channels=dim, kernel_size=3),
+            nn.BatchNorm1d(dim)
+        )
+        self.maxpool = nn.MaxPool1d(kernel_size=2)
         self.gru = nn.GRU(input_size=dim, hidden_size=dim, num_layers=1, bidirectional=True)
         self.norm = nn.LayerNorm(normalized_shape=dim*2)
     def forward(self, x):
         x = self.conv(x.permute(0, 2, 1))
-        x = self.tanh(x)
         x = self.maxpool(x).permute(0, 2, 1)
         x, _ = self.gru(x)
         return self.norm(x)
 
 class ResCBAR(nn.Module):
-    def __init__(self, classes, seq, dim):
+    def __init__(self, classes, dim, r):
         super().__init__()
         self.cn_gr1 = CN_GR(dim)
         self.cn_gr2 = CN_GR(dim)       
         self.cn_gr3 = CN_GR(dim)
         
         self.norm1 = nn.LayerNorm(normalized_shape=dim*2)
-        self.cbam = CBAM(channels=dim*2, r=4)
+        self.cbam = CBAM(channels=dim*2, r=r)
         self.gru = nn.GRU(input_size=dim*2, hidden_size=dim*2, num_layers=1, bidirectional=True)
         self.norm2 = nn.LayerNorm(normalized_shape=dim*4)
 
