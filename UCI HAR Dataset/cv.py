@@ -7,7 +7,7 @@ from sklearn.base import BaseEstimator
 from sklearn.metrics import accuracy_score
 from tqdm.auto import tqdm
 
-def cvTrain(X, y, Model, params, k=5, epochs=150):
+def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
 
     models, accuracies = [], []
     kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
@@ -66,7 +66,7 @@ def cvTrain(X, y, Model, params, k=5, epochs=150):
             
                 valid_acc = valid_correct / valid_total
         
-                if epoch % 10 == 9:
+                if verbose & ((epoch+1) * 10 % epochs == 0):
                     print(f"Train: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(train_losses).mean():.4f}, Accuracy: {train_acc:.4f}| Valid: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(valid_losses).mean():.4f}, Accuracy: {valid_acc:.4f}")
                 
             models.append(model)
@@ -88,14 +88,14 @@ def cvTrain(X, y, Model, params, k=5, epochs=150):
             models.append(model)
             accuracies.append(acc)
             
-            print(f"Fold {fold+1} Accuracy: {acc:.4f}")
+            if verbose: print(f"Fold {fold+1} Accuracy: {acc:.4f}")
         
         print(f"Mean Accuracy: {np.mean(accuracies):.4f}")
 
     else: print("model must be torch.nn.Module or sklearn")
     return models
 
-def cvTest(X, y, models):
+def cvTest(X, y, models, verbose=False):
     if all(isinstance(model, nn.Module) for model in models): 
         dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
         loader = DataLoader(dataset, batch_size=128, shuffle=False)
@@ -113,9 +113,9 @@ def cvTest(X, y, models):
                     
             preds.append(torch.cat(test_pred))
             fold += 1
-            print(f"Fold [{fold}], Loss: {torch.tensor(test_losses).mean():.4f}, Accuracy: {accuracy_score(y, torch.cat(test_pred).argmax(dim=1)):.4f}")
+            if verbose: print(f"Fold [{fold}], Loss: {torch.tensor(test_losses).mean():.4f}, Accuracy: {accuracy_score(y, torch.cat(test_pred).argmax(dim=1)):.4f}")
             
-        y_pred = torch.stack(preds, dim=0).mean(dim=0).argmax(dim=1)
+        y_pred = torch.stack(preds, dim=0).mean(dim=0).argmax(dim=1).cpu().numpy()
         print(f"Mean Accuracy: {accuracy_score(y, y_pred):.4f}")
         
     elif all(isinstance(model, BaseEstimator) for model in models): 
@@ -123,4 +123,4 @@ def cvTest(X, y, models):
         print("Accuracy:", accuracy_score(y, y_pred))
         
     else: print("model must be torch.nn.Module or sklearn")
-    return y_pred
+    return y_pred, accuracy_score(y, y_pred)

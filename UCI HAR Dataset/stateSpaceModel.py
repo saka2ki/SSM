@@ -6,8 +6,8 @@ from s4 import SSM
 class StateSpaceModel(nn.Module):
     def __init__(self, vocab_size, dim, N, layer=1, dropout=0.):
         super().__init__()
-        self.emb = nn.Linear(9, dim, bias=False)
-        #self.conv = nn.Conv1d(in_channels=9, out_channels=dim, kernel_size=3, stride=1, padding="same")
+        #self.emb = nn.Linear(9, dim, bias=False)
+        self.emb = nn.Conv1d(in_channels=9, out_channels=dim, kernel_size=3, stride=1, padding="same")
         self.layers = nn.ModuleList([
             nn.ModuleDict({
               'ssm':
@@ -40,7 +40,7 @@ class StateSpaceModel(nn.Module):
             nn.init.zeros_(module.bias)
         
     def forward(self, x, cnn=True):
-        x = self.emb(x)
+        x = self.emb(x.transpose(1, 2)).transpose(1, 2)
         for layer in self.layers:
             x = layer['ssm'](x) + x
             x = layer['ffn'](x) + x
