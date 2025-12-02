@@ -23,6 +23,7 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
             model = Model(**params).to('cuda')
             criterion = nn.CrossEntropyLoss()
             optimizer = torch.optim.NAdam(model.parameters(), lr=1e-3)#, weight_decay=1e-2)
+            early_stop, cnt = 0, 0
             
             for epoch in tqdm(range(epochs), desc=f'Fold{fold+1}'):
             
@@ -68,6 +69,13 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
         
                 if verbose & ((epoch+1) * 10 % epochs == 0):
                     print(f"Train: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(train_losses).mean():.4f}, Accuracy: {train_acc:.4f}| Valid: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(valid_losses).mean():.4f}, Accuracy: {valid_acc:.4f}")
+                if early_stop >= valid_acc:
+                    cnt += 1
+                    if cnt > 4:
+                        print(f"========Early Stopping: Epoch{epoch+1}========")
+                        break
+                else: cnt = 0
+                early_stop = valid_acc
                 
             models.append(model)
             accuracies.append(valid_acc)

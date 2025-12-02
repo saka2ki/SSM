@@ -11,19 +11,21 @@ class ResNet1d(nn.Module):
             nn.MaxPool1d(kernel_size=2)
         )
         self.conv = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv1d(dim*2**i, dim*2**i, kernel_size=1),
-                nn.ReLU(),
-                nn.BatchNorm1d(dim*2**i),
-                
-                nn.Conv1d(dim*2**i, dim*2**(i+1), kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
-                nn.BatchNorm1d(dim*2**(i+1)),
-                
-                nn.Conv1d(dim*2**(i+1), dim*2**(i+1), kernel_size=1),
-                nn.ReLU(),
-                nn.BatchNorm1d(dim*2**(i+1)),
-            ) for i in range(4)        
+            nn.ModuleList([
+                    nn.Sequential(
+                    nn.Conv1d(dim*2**(i+(j!=0)), dim*2**(i+(j!=0)), kernel_size=1),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(dim*2**(i+(j!=0))),
+                    
+                    nn.Conv1d(dim*2**(i+(j!=0)), dim*2**(i+1), kernel_size=3, stride=1+(j==0), padding=1),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(dim*2**(i+1)),
+                    
+                    nn.Conv1d(dim*2**(i+1), dim*2**(i+1), kernel_size=1),
+                    nn.ReLU(),
+                    nn.BatchNorm1d(dim*2**(i+1)),
+                ) for j in range(i+2)
+            ]) for i in range(4)        
         ])
 
         self.res = nn.ModuleList([
@@ -40,6 +42,9 @@ class ResNet1d(nn.Module):
 
     def forward(self, x):
         x = self.input(x.transpose(1, 2))
-        for conv, res in zip(self.conv, self.res):
-            x = conv(x) + res(x)
+        for block, res in zip(self.conv, self.res):
+            res = res(x)
+            for conv in block:
+                x = conv(x)
+            x = res + x
         return self.head(x)
