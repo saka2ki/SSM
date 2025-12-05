@@ -7,6 +7,31 @@ from sklearn.base import BaseEstimator
 from sklearn.metrics import accuracy_score
 from tqdm.auto import tqdm
 
+import random
+import numpy as np
+import torch
+
+# parserなどで指定
+seed = 42
+num_workers = 0
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+batch_size = 256
+
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+g = torch.Generator()
+g.manual_seed(seed)
+
 def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
 
     models, accuracies = [], []
@@ -14,13 +39,18 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
     
     if issubclass(Model, nn.Module):
         dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
-        batch_size=128
         
         for fold, (train_idx, valid_idx) in enumerate(kf.split(X, y)):
         
-            train_loader = DataLoader(Subset(dataset, train_idx), batch_size=batch_size, shuffle=True)
-            valid_loader = DataLoader(Subset(dataset, valid_idx), batch_size=batch_size, shuffle=False)
-            model = Model(**params).to('cuda')
+            train_loader = DataLoader(
+                Subset(dataset, train_idx), batch_size=batch_size, shuffle=True,
+                worker_init_fn=seed_worker, generator=g, pin_memory=True
+            )
+            valid_loader = DataLoader(
+                Subset(dataset, valid_idx), batch_size=batch_size, shuffle=False,
+                worker_init_fn=seed_worker, generator=g, pin_memory=True
+            )
+            model = Model(**params).to(device)
             criterion = nn.CrossEntropyLoss()
             optimizer = torch.optim.NAdam(model.parameters(), lr=1e-3)#, weight_decay=1e-2)
             early_stop, cnt = 0, 0
@@ -37,7 +67,7 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
                 model.train()
                 for train, labels in train_loader:
                     optimizer.zero_grad()
-                    outputs = model(train.to('cuda')).to('cpu')
+                    outputs = model(train.to(device, non_blocking=True)).to('cpu')
                     train_loss = criterion(outputs, labels)
                     train_loss.backward()
                     optimizer.step()
@@ -55,8 +85,8 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
                 # --------------------
                 model.eval()
                 with torch.no_grad():
-                    for test, labels in valid_loader:
-                        outputs = model(test.to('cuda')).to('cpu')
+                    for valid, labels in valid_loader:
+                        outputs = model(valid.to(device, non_blocking=True)).to('cpu')
                         valid_loss = criterion(outputs, labels)
                         valid_losses.append(valid_loss.item())
             
@@ -71,7 +101,7 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
                     print(f"Train: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(train_losses).mean():.4f}, Accuracy: {train_acc:.4f}| Valid: Epoch [{epoch+1}/{epochs}], Loss: {torch.tensor(valid_losses).mean():.4f}, Accuracy: {valid_acc:.4f}")
                 if early_stop >= valid_acc:
                     cnt += 1
-                    if cnt > 4:
+                    if cnt > 10:
                         print(f"========Early Stopping: Epoch{epoch+1}========")
                         break
                 else: cnt = 0
@@ -106,7 +136,10 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
 def cvTest(X, y, models, verbose=False):
     if all(isinstance(model, nn.Module) for model in models): 
         dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
-        loader = DataLoader(dataset, batch_size=128, shuffle=False)
+        loader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=False,
+            worker_init_fn=seed_worker, generator=g, pin_memory=True
+        )
         criterion = nn.CrossEntropyLoss()
         preds, fold = [], 0
         for model in tqdm(models):
@@ -114,7 +147,7 @@ def cvTest(X, y, models, verbose=False):
             test_pred, test_losses = [], []
             with torch.no_grad():
                 for test, labels in loader:
-                    outputs = model(test.to('cuda')).to('cpu')
+                    outputs = model(test.to(device, non_blocking=True)).to('cpu')
                     test_pred.append(outputs)
                     test_loss = criterion(outputs, labels)
                     test_losses.append(test_loss.item())

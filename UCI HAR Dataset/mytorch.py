@@ -7,24 +7,28 @@ class CNNLSTM(nn.Module):
         self.is_cnn, self.is_lstm = False, False
         self.input = nn.Sequential(
             nn.Conv1d(9, dim, kernel_size=5, stride=2),
-            nn.ReLU(),
-            nn.BatchNorm1d(dim)
+            nn.BatchNorm1d(dim),
+            nn.ReLU()
+            #nn.Linear(9, dim, bias=False)
         )
         if num_cnn > 0:
             self.cnn = nn.ModuleList([
                 nn.ModuleDict({
                     'double_dim': nn.Sequential(
-                        nn.Conv1d(dim*2**i, dim*2**(i+1), 3, padding=0),
-                        nn.ReLU(),
-                        nn.BatchNorm1d(dim*2**(i+1))),
+                        nn.Conv1d(dim*2**i, dim*2**(i+1), 3, padding=1),
+                        nn.BatchNorm1d(dim*2**(i+1)),
+                        nn.ReLU()
+                    ),
                     'kernel_3': nn.Sequential(
                         nn.Conv1d(dim*2**(i+1), dim*2**(i+1), 3, padding=1),
-                        nn.ReLU(),
-                        nn.BatchNorm1d(dim*2**(i+1))),
+                        nn.BatchNorm1d(dim*2**(i+1)),
+                        nn.ReLU()
+                    ),
                     'kernel_1': nn.Sequential(
-                        nn.Conv1d(dim*2**(i+1), dim*2**(i+1), 1, padding=0),
-                        nn.ReLU(),
-                        nn.BatchNorm1d(dim*2**(i+1)))
+                        nn.Conv1d(dim*2**i, dim*2**(i+1), 1, padding=0),
+                        nn.BatchNorm1d(dim*2**(i+1)),
+                        nn.ReLU()
+                    )
                 })
                 for i in range(num_cnn)
             ])
@@ -32,6 +36,7 @@ class CNNLSTM(nn.Module):
         if num_lstm > 0:
             self.lstm = nn.LSTM(dim*2**num_cnn, dim*2**(num_cnn), num_layers=num_lstm, batch_first=True, dropout=0.2, bidirectional=True)
             self.is_lstm=True
+
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool1d(output_size=1),
             nn.Flatten(),
@@ -43,11 +48,12 @@ class CNNLSTM(nn.Module):
         x = self.input(x.transpose(1, 2))
         if self.is_cnn:
             for cnn in self.cnn:
-                x = cnn['double_dim'](x)
-                x = torch.max_pool1d(cnn['kernel_3'](x) + cnn['kernel_1'](x), kernel_size=2)
+                x = cnn['double_dim'](x) + cnn['kernel_1'](x)
+                x = torch.max_pool1d(cnn['kernel_3'](x) + x, kernel_size=2)
         if self.is_lstm:
             x, _ = self.lstm(x.transpose(1, 2))
             x = x.transpose(1, 2)
+
         return self.head(x)
                 
         
