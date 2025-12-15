@@ -15,7 +15,7 @@ import torch
 seed = 42
 num_workers = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-batch_size = 256
+batch_size = 64
 
 random.seed(seed)
 np.random.seed(seed)

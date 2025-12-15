@@ -7,6 +7,7 @@ class CN_GR(nn.Module):
         super().__init__()
         self.conv = nn.Sequential(
             nn.Conv1d(in_channels=3, out_channels=dim, kernel_size=3),
+            #nn.ReLU(),
             nn.BatchNorm1d(dim)
         )
         self.maxpool = nn.MaxPool1d(kernel_size=2)
@@ -19,7 +20,7 @@ class CN_GR(nn.Module):
         return self.norm(x)
 
 class ResCBAR(nn.Module):
-    def __init__(self, classes, dim, r):
+    def __init__(self, classes, dim, r=16):
         super().__init__()
         self.cn_gr1 = CN_GR(dim)
         self.cn_gr2 = CN_GR(dim)       
