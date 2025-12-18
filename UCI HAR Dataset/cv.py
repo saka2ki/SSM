@@ -35,7 +35,7 @@ g.manual_seed(seed)
 def cvTrain(X, y, Model, params, k=5, epochs=150, verbose=False):
 
     models, accuracies = [], []
-    kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=42)
+    kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed)
     
     if issubclass(Model, nn.Module):
         dataset = TensorDataset(torch.from_numpy(X), torch.from_numpy(y))
