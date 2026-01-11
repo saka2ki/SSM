@@ -31,11 +31,11 @@ def seed_worker(worker_id):
 g = torch.Generator()
 g.manual_seed(seed)
 
-def Train(model, train_loader, valid_loader, q_acc, q_model, event, epochs):
+def Train(model, train_loader, valid_loader, lr, q_acc, q_model, event, epochs):
     criterion = nn.CrossEntropyLoss()
     model = model.to(device)
-    optim = torch.optim.NAdam(model.parameters(), lr=1e-3)
-    
+    optim = torch.optim.NAdam(model.parameters(), lr=lr)
+
     for epoch in range(epochs):
         model.train()
         train_losses = []
@@ -63,10 +63,11 @@ def Train(model, train_loader, valid_loader, q_acc, q_model, event, epochs):
         acc = valid_correct / valid_total
         q_acc.put(acc)  # 1 epochごとにAccuracyを送信
         event.clear()   # 次epochまで待機
-        event.wait()    # cvTrainから許可が来るまで待機
+        if not event.wait(timeout=3): break# cvTrainから許可が来るまで待機
+
     q_model.put(model.cpu())
 
-def cvTrain(X, y, Model, params, k=5, epochs=150, trial=None):
+def cvTrain(X, y, Model, params, k=5, epochs=150, lr=1e-3, trial=None):
     kf = StratifiedKFold(n_splits=k, shuffle=True, random_state=seed)
     
     if issubclass(Model, nn.Module): 
@@ -87,25 +88,34 @@ def cvTrain(X, y, Model, params, k=5, epochs=150, trial=None):
             )
         
             p = mp.Process(target=Train, args=(Model(**params),
-                                               train_loader, valid_loader,
+                                               train_loader, valid_loader, lr,
                                                q_acc, q_model, event, epochs))
             p.start()
             processes.append(p)
-        
+            
+        best, cnt = 0, 0
         for epoch in tqdm(range(epochs)):
             accuracies = [q_acc.get() for _ in range(k)]
+            acc = np.mean(accuracies)
+
             if trial:
-                trial.report(np.mean(accuracies), epoch)
-                if trial.should_prune():
-                    # 全プロセスを強制終了
-                    for p in processes:
-                        p.terminate()
-                    for p in processes:
-                        p.join()
-                    raise optuna.TrialPruned()
+                trial.report(acc, epoch)
+                if trial.should_prune(): 
+                    print(f"========Optuna Pruning: Epoch{epoch+1}========")
+                    break  
+            if best>=acc: 
+                cnt += 1
+                if cnt>=epochs: 
+                    print(f"========Early Stopping: Epoch{epoch+1}========")
+                    break
+            else:
+                best = acc
+                cnt = 0 
+                    
             event.set()  # 次epochをTrainプロセスに許可
         models = [q_model.get() for _ in range(k)]
-        
+        for p in processes:
+            p.terminate()        
         for p in processes:
             p.join()
             
